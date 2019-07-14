@@ -26,10 +26,12 @@ import org.apache.arrow.vector.complex.reader.FieldReader;
 import org.apache.arrow.vector.holders.NullableUInt1Holder;
 import org.apache.arrow.vector.holders.UInt1Holder;
 import org.apache.arrow.vector.types.Types.MinorType;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.TransferPair;
 
 import io.netty.buffer.ArrowBuf;
+
 
 /**
  * UInt1Vector implements a fixed width (1 bytes) vector of
@@ -45,7 +47,11 @@ public class UInt1Vector extends BaseFixedWidthVector implements BaseIntVector {
   }
 
   public UInt1Vector(String name, FieldType fieldType, BufferAllocator allocator) {
-    super(name, allocator, fieldType, TYPE_WIDTH);
+    this(new Field(name, fieldType, null), allocator);
+  }
+
+  public UInt1Vector(Field field, BufferAllocator allocator) {
+    super(field, allocator, TYPE_WIDTH);
     reader = new UInt1ReaderImpl(UInt1Vector.this);
   }
 
@@ -139,24 +145,6 @@ public class UInt1Vector extends BaseFixedWidthVector implements BaseIntVector {
     } else {
       return getNoOverflow(valueBuffer, index);
     }
-  }
-
-  /**
-   * Copies the value at fromIndex to thisIndex (including validity).
-   */
-  public void copyFrom(int fromIndex, int thisIndex, UInt1Vector from) {
-    BitVectorHelper.setValidityBit(validityBuffer, thisIndex, from.isSet(fromIndex));
-    final byte value = from.valueBuffer.getByte(fromIndex * TYPE_WIDTH);
-    valueBuffer.setByte(thisIndex * TYPE_WIDTH, value);
-  }
-
-  /**
-   * Identical to {@link #copyFrom(int, int, UInt1Vector)} but reallocates buffer if index is larger
-   * than capacity.
-   */
-  public void copyFromSafe(int fromIndex, int thisIndex, UInt1Vector from) {
-    handleSafe(thisIndex);
-    copyFrom(fromIndex, thisIndex, from);
   }
 
 
@@ -331,9 +319,8 @@ public class UInt1Vector extends BaseFixedWidthVector implements BaseIntVector {
   }
 
   @Override
-  public void setEncodedValue(int index, int value) {
-    Preconditions.checkArgument(value <= 0xFF, "value is overflow: %s", value);
-    this.setSafe(index, value);
+  public void setWithPossibleTruncate(int index, long value) {
+    this.setSafe(index, (int) value);
   }
 
 

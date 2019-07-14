@@ -180,6 +180,19 @@ macro(resolve_dependency DEPENDENCY_NAME)
   endif()
 endmacro()
 
+macro(resolve_dependency_with_version DEPENDENCY_NAME REQUIRED_VERSION)
+  if(${DEPENDENCY_NAME}_SOURCE STREQUAL "AUTO")
+    find_package(${DEPENDENCY_NAME} ${REQUIRED_VERSION} MODULE)
+    if(NOT ${${DEPENDENCY_NAME}_FOUND})
+      build_dependency(${DEPENDENCY_NAME})
+    endif()
+  elseif(${DEPENDENCY_NAME}_SOURCE STREQUAL "BUNDLED")
+    build_dependency(${DEPENDENCY_NAME})
+  elseif(${DEPENDENCY_NAME}_SOURCE STREQUAL "SYSTEM")
+    find_package(${DEPENDENCY_NAME} ${REQUIRED_VERSION} REQUIRED)
+  endif()
+endmacro()
+
 # ----------------------------------------------------------------------
 # Thirdparty versions, environment variables, source URLs
 
@@ -1282,7 +1295,12 @@ macro(build_protobuf)
 endmacro()
 
 if(ARROW_WITH_PROTOBUF)
-  resolve_dependency(Protobuf)
+  if(ARROW_WITH_GRPC)
+    set(ARROW_PROTOBUF_REQUIRED_VERSION "3.6.0")
+  else()
+    set(ARROW_PROTOBUF_REQUIRED_VERSION "2.6.1")
+  endif()
+  resolve_dependency_with_version(Protobuf ${ARROW_PROTOBUF_REQUIRED_VERSION})
 
   if(ARROW_PROTOBUF_USE_SHARED AND MSVC)
     add_definitions(-DPROTOBUF_USE_DLLS)
@@ -2037,22 +2055,14 @@ endmacro()
 
 if(ARROW_WITH_GRPC)
   if(c-ares_SOURCE STREQUAL "AUTO")
-    find_package(c-ares QUIET)
+    find_package(c-ares QUIET CONFIG)
     if(NOT c-ares_FOUND)
-      # Fedora doesn't package the CMake config
-      find_package(c-aresAlt)
-    endif()
-    if(NOT c-ares_FOUND AND NOT c-aresAlt_FOUND)
       build_cares()
     endif()
   elseif(c-ares_SOURCE STREQUAL "BUNDLED")
     build_cares()
   elseif(c-ares_SOURCE STREQUAL "SYSTEM")
-    find_package(c-ares QUIET)
-    if(NOT c-ares_FOUND)
-      # Fedora doesn't package the CMake config
-      find_package(c-aresAlt REQUIRED)
-    endif()
+    find_package(c-ares REQUIRED CONFIG)
   endif()
 
   # TODO: Don't use global includes but rather target_include_directories
@@ -2140,6 +2150,9 @@ macro(build_grpc)
       -DCMAKE_INSTALL_LIBDIR=lib
       "-DProtobuf_PROTOC_LIBRARY=${GRPC_Protobuf_PROTOC_LIBRARY}"
       -DBUILD_SHARED_LIBS=OFF)
+  if(OPENSSL_ROOT_DIR)
+    list(APPEND GRPC_CMAKE_ARGS -DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR})
+  endif()
 
   # XXX the gRPC git checkout is huge and takes a long time
   # Ideally, we should be able to use the tarballs, but they don't contain
@@ -2282,7 +2295,7 @@ macro(build_orc)
     endif()
     if("${COMPILER_VERSION}" VERSION_GREATER "4.0")
       set(ORC_CMAKE_CXX_FLAGS " -Wno-zero-as-null-pointer-constant \
--Wno-inconsistent-missing-destructor-override ")
+-Wno-inconsistent-missing-destructor-override -Wno-error=undef ")
     endif()
   endif()
 

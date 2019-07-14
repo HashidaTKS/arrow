@@ -149,9 +149,8 @@ hash_t ComputeStringHash(const void* data, int64_t length) {
       // the results
       uint32_t x, y;
       hash_t hx, hy;
-      // XXX those are unaligned accesses.  Should we have a facility for that?
-      x = *reinterpret_cast<const uint32_t*>(p + n - 4);
-      y = *reinterpret_cast<const uint32_t*>(p);
+      x = util::SafeLoadAs<uint32_t>(p + n - 4);
+      y = util::SafeLoadAs<uint32_t>(p);
       hx = ScalarHelper<uint32_t, AlgNum>::ComputeHash(x);
       hy = ScalarHelper<uint32_t, AlgNum ^ 1>::ComputeHash(y);
       return n ^ hx ^ hy;
@@ -160,16 +159,20 @@ hash_t ComputeStringHash(const void* data, int64_t length) {
     // Apply the same principle as above
     uint64_t x, y;
     hash_t hx, hy;
-    x = *reinterpret_cast<const uint64_t*>(p + n - 8);
-    y = *reinterpret_cast<const uint64_t*>(p);
+    x = util::SafeLoadAs<uint64_t>(p + n - 8);
+    y = util::SafeLoadAs<uint64_t>(p);
     hx = ScalarHelper<uint64_t, AlgNum>::ComputeHash(x);
     hy = ScalarHelper<uint64_t, AlgNum ^ 1>::ComputeHash(y);
     return n ^ hx ^ hy;
   }
 
   if (HashUtil::have_hardware_crc32) {
+#ifdef ARROW_HAVE_ARMV8_CRYPTO
+    auto h = HashUtil::Armv8CrcHashParallel(data, static_cast<int32_t>(length), AlgNum);
+#else
     // DoubleCrcHash is faster that Murmur2.
     auto h = HashUtil::DoubleCrcHash(data, static_cast<int32_t>(length), AlgNum);
+#endif
     return ScalarHelper<uint64_t, AlgNum>::ComputeHash(h);
   } else {
     // Fall back on 64-bit Murmur2 for longer strings.
@@ -721,6 +724,7 @@ class BinaryMemoTable : public MemoTable {
 #ifndef NDEBUG
     int64_t data_length = values_.size() - static_cast<size_t>(left_offset);
     assert(data_length + width_size == out_size);
+    ARROW_UNUSED(data_length);
 #endif
 
     auto in_data = values_.data() + left_offset;

@@ -25,6 +25,7 @@ import org.apache.arrow.vector.complex.reader.FieldReader;
 import org.apache.arrow.vector.holders.NullableUInt4Holder;
 import org.apache.arrow.vector.holders.UInt4Holder;
 import org.apache.arrow.vector.types.Types.MinorType;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.TransferPair;
 
@@ -44,7 +45,11 @@ public class UInt4Vector extends BaseFixedWidthVector implements BaseIntVector {
   }
 
   public UInt4Vector(String name, FieldType fieldType, BufferAllocator allocator) {
-    super(name, allocator, fieldType, TYPE_WIDTH);
+    this(new Field(name, fieldType, null), allocator);
+  }
+
+  public UInt4Vector(Field field, BufferAllocator allocator) {
+    super(field, allocator, TYPE_WIDTH);
     reader = new UInt4ReaderImpl(UInt4Vector.this);
   }
 
@@ -137,25 +142,6 @@ public class UInt4Vector extends BaseFixedWidthVector implements BaseIntVector {
     } else {
       return getNoOverflow(valueBuffer, index);
     }
-  }
-
-  /**
-   * Copies a value and validity setting to the thisIndex position from the given vector
-   * at fromIndex.
-   */
-  public void copyFrom(int fromIndex, int thisIndex, UInt4Vector from) {
-    BitVectorHelper.setValidityBit(validityBuffer, thisIndex, from.isSet(fromIndex));
-    final int value = from.valueBuffer.getInt(fromIndex * TYPE_WIDTH);
-    valueBuffer.setInt(thisIndex * TYPE_WIDTH, value);
-  }
-
-  /**
-   * Same as {@link #copyFrom(int, int, UInt4Vector)} but will allocate additional space
-   * if fromIndex is larger than current capacity.
-   */
-  public void copyFromSafe(int fromIndex, int thisIndex, UInt4Vector from) {
-    handleSafe(thisIndex);
-    copyFrom(fromIndex, thisIndex, from);
   }
 
 
@@ -302,8 +288,8 @@ public class UInt4Vector extends BaseFixedWidthVector implements BaseIntVector {
   }
 
   @Override
-  public void setEncodedValue(int index, int value) {
-    this.setSafe(index, value);
+  public void setWithPossibleTruncate(int index, long value) {
+    this.setSafe(index, (int) value);
   }
 
   private class TransferImpl implements TransferPair {

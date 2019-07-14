@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import atexit
 import re
 import warnings
 
@@ -589,32 +590,6 @@ cdef class UnknownExtensionType(ExtensionType):
         return self.serialized
 
 
-cdef class _ExtensionTypesInitializer:
-    #
-    # A private object that handles process-wide registration of the Python
-    # ExtensionType.
-    #
-
-    def __cinit__(self):
-        cdef:
-            DataType storage_type
-            shared_ptr[CExtensionType] cpy_ext_type
-
-        # Make a dummy C++ ExtensionType
-        storage_type = null()
-        check_status(CPyExtensionType.FromClass(storage_type.sp_type,
-                                                ExtensionType, &cpy_ext_type))
-        check_status(
-            RegisterPyExtensionType(<shared_ptr[CDataType]> cpy_ext_type))
-
-    def __dealloc__(self):
-        # This needs to be done explicitly before the Python interpreter is
-        # finalized.  If the C++ type is destroyed later in the process
-        # teardown stage, it will invoke CPython APIs such as Py_DECREF
-        # with a destroyed interpreter.
-        check_status(UnregisterPyExtensionType())
-
-
 cdef class Field:
     """
     A named field, with a data type, nullability, and optional metadata.
@@ -836,7 +811,7 @@ cdef class Schema:
             metadata=self.metadata
         )
 
-    def equals(self, other, bint check_metadata=True):
+    def equals(self, Schema other not None, bint check_metadata=True):
         """
         Test if this schema is equal to the other
 
@@ -850,8 +825,7 @@ cdef class Schema:
         -------
         is_equal : boolean
         """
-        cdef Schema _other = other
-        return self.sp_schema.get().Equals(deref(_other.schema),
+        return self.sp_schema.get().Equals(deref(other.schema),
                                            check_metadata)
 
     @classmethod
@@ -1863,4 +1837,26 @@ def is_float_value(object obj):
     return IsPyFloat(obj)
 
 
-_extension_types_initializer = _ExtensionTypesInitializer()
+def _register_py_extension_type():
+    cdef:
+        DataType storage_type
+        shared_ptr[CExtensionType] cpy_ext_type
+
+    # Make a dummy C++ ExtensionType
+    storage_type = null()
+    check_status(CPyExtensionType.FromClass(storage_type.sp_type,
+                                            ExtensionType, &cpy_ext_type))
+    check_status(
+        RegisterPyExtensionType(<shared_ptr[CDataType]> cpy_ext_type))
+
+
+def _unregister_py_extension_type():
+    # This needs to be done explicitly before the Python interpreter is
+    # finalized.  If the C++ type is destroyed later in the process
+    # teardown stage, it will invoke CPython APIs such as Py_DECREF
+    # with a destroyed interpreter.
+    check_status(UnregisterPyExtensionType())
+
+
+_register_py_extension_type()
+atexit.register(_unregister_py_extension_type)

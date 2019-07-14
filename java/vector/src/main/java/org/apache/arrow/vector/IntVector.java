@@ -25,6 +25,7 @@ import org.apache.arrow.vector.complex.reader.FieldReader;
 import org.apache.arrow.vector.holders.IntHolder;
 import org.apache.arrow.vector.holders.NullableIntHolder;
 import org.apache.arrow.vector.types.Types.MinorType;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.util.TransferPair;
 
@@ -59,7 +60,18 @@ public class IntVector extends BaseFixedWidthVector implements BaseIntVector {
    * @param allocator allocator for memory management.
    */
   public IntVector(String name, FieldType fieldType, BufferAllocator allocator) {
-    super(name, allocator, fieldType, TYPE_WIDTH);
+    this(new Field(name, fieldType, null), allocator);
+  }
+
+  /**
+   * Instantiate a IntVector. This doesn't allocate any memory for
+   * the data in vector.
+   *
+   * @param field field materialized by this vector
+   * @param allocator allocator for memory management.
+   */
+  public IntVector(Field field, BufferAllocator allocator) {
+    super(field, allocator, TYPE_WIDTH);
     reader = new IntReaderImpl(IntVector.this);
   }
 
@@ -134,35 +146,6 @@ public class IntVector extends BaseFixedWidthVector implements BaseIntVector {
       return valueBuffer.getInt(index * TYPE_WIDTH);
     }
   }
-
-  /**
-   * Copy a cell value from a particular index in source vector to a particular
-   * position in this vector.
-   *
-   * @param fromIndex position to copy from in source vector
-   * @param thisIndex position to copy to in this vector
-   * @param from      source vector
-   */
-  public void copyFrom(int fromIndex, int thisIndex, IntVector from) {
-    BitVectorHelper.setValidityBit(validityBuffer, thisIndex, from.isSet(fromIndex));
-    final int value = from.valueBuffer.getInt(fromIndex * TYPE_WIDTH);
-    valueBuffer.setInt(thisIndex * TYPE_WIDTH, value);
-  }
-
-  /**
-   * Same as {@link #copyFrom(int, int, IntVector)} except that
-   * it handles the case when the capacity of the vector needs to be expanded
-   * before copy.
-   *
-   * @param fromIndex position to copy from in source vector
-   * @param thisIndex position to copy to in this vector
-   * @param from      source vector
-   */
-  public void copyFromSafe(int fromIndex, int thisIndex, IntVector from) {
-    handleSafe(thisIndex);
-    copyFrom(fromIndex, thisIndex, from);
-  }
-
 
   /*----------------------------------------------------------------*
    |                                                                |
@@ -344,8 +327,8 @@ public class IntVector extends BaseFixedWidthVector implements BaseIntVector {
   }
 
   @Override
-  public void setEncodedValue(int index, int value) {
-    this.setSafe(index, value);
+  public void setWithPossibleTruncate(int index, long value) {
+    this.setSafe(index, (int) value);
   }
 
   private class TransferImpl implements TransferPair {

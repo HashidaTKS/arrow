@@ -66,6 +66,7 @@ from pyarrow.lib import (null, bool_,
                          schema,
                          Array, Tensor,
                          array, chunked_array, column, table,
+                         SparseTensorCSR, SparseTensorCOO,
                          infer_type, from_numpy_dtype,
                          NullArray,
                          NumericArray, IntegerArray, FloatingPointArray,
@@ -121,8 +122,7 @@ from pyarrow.lib import (ArrowException,
                          ArrowMemoryError,
                          ArrowNotImplementedError,
                          ArrowTypeError,
-                         ArrowSerializationError,
-                         PlasmaObjectExists)
+                         ArrowSerializationError)
 
 # Serialization
 from pyarrow.lib import (deserialize_from, deserialize,

@@ -114,9 +114,30 @@ services:
     build:
       context: .
       dockerfile: cpp/Dockerfile
-    environment:
-      PARQUET_TEST_DATA: /arrow/cpp/submodules/parquet-testing/data
     volumes: *ubuntu-volumes
+
+  cpp-system-deps:
+    # Usage:
+    #   docker-compose build cpp-system-deps
+    #   docker-compose run cpp-system-deps
+    image: ursalab/arrow:cpp-system-deps
+    shm_size: 2G
+    cap_add:
+      # LeakSanitizer and gdb requires ptrace(2)
+      - SYS_PTRACE
+    build:
+      context: .
+      dockerfile: cpp/Dockerfile.ubuntu-bionic
+      args:
+        LLVM_VERSION: 7
+    environment:
+      ARROW_FLIGHT: "ON"
+      ARROW_USE_ASAN: "ON"
+      ARROW_USE_UBSAN: "ON"
+    volumes:
+      - .:/arrow:delegated
+      - ubuntu-cache:/build:delegated
+      - ${HOME}/.ccache:/build/ccache:cached
 
   cpp-release:
     # Usage:
@@ -398,6 +419,17 @@ services:
     command: arrow/dev/lint/run_linters.sh
     volumes: *ubuntu-volumes
 
+  fuzzit:
+    # Usage:
+    #   docker-compose build cpp
+    #   docker-compose build fuzzit
+    #   docker-compose run fuzzit
+    image: arrow:fuzzit
+    build:
+      context: .
+      dockerfile: dev/fuzzit/Dockerfile
+    volumes: *ubuntu-volumes
+
   iwyu:
     # Usage:
     #   export PYTHON_VERSION=3.6
@@ -473,7 +505,7 @@ services:
     #     $ docker-compose pull python-manylinux2010
     #   an then run:
     #     $ docker-compose run -e PYTHON_VERSION=3.7 python-manylinux2010
-    image: quay.io/ursa-labs/arrow_manylinux2010_x86_64_base:latest
+    image: ursalab/arrow_manylinux2010_x86_64_base:latest
     build:
       context: python/manylinux2010
       dockerfile: Dockerfile-x86_64_base
@@ -608,6 +640,16 @@ services:
       - spark-cache:/spark:delegated
 
   # TODO(kszucs): hive-integration
+
+  ################################# Release ###################################
+
+  release-source:
+    image: arrow:release-source
+    build:
+      context: .
+      dockerfile: dev/release/source/Dockerfile
+    volumes:
+      - .:/arrow:delegated
 
   ######################## Verification Containers ############################
 

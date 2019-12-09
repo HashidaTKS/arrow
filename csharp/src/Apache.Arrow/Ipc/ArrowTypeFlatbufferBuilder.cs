@@ -14,6 +14,7 @@
 // limitations under the License.
 
 using System;
+using System.Collections.Generic;
 using Apache.Arrow.Flatbuf;
 using Apache.Arrow.Types;
 using FlatBuffers;
@@ -66,6 +67,8 @@ namespace Apache.Arrow.Ipc
 
             public FieldType Result { get; private set; }
 
+            public List<Offset<Flatbuf.Field>> Children { get; set; }
+
             public TypeVisitor(FlatBufferBuilder builder)
             {
                 Builder = builder;
@@ -94,11 +97,15 @@ namespace Apache.Arrow.Ipc
                 Result = FieldType.Build(
                     Flatbuf.Type.Binary,
                     Flatbuf.Binary.EndBinary(Builder));
+                
             }
 
             public void Visit(ListType type)
             {
-                throw new NotImplementedException();
+                Flatbuf.List.StartList(Builder);
+                var offset = Flatbuf.List.EndList(Builder);
+                Result = FieldType.Build(
+                    Flatbuf.Type.List, offset);
             }
 
             public void Visit(UnionType type)

@@ -14,17 +14,68 @@
 // limitations under the License.
 
 using System;
+using Apache.Arrow.Flatbuf;
+using Apache.Arrow.Memory;
 using Apache.Arrow.Types;
 
 namespace Apache.Arrow
 {
     public class ListArray : Array
     {
+
+
+        public class Builder : IArrowArrayBuilder<ListArray>
+        {
+            //todo: support null bitmap
+
+            public IArrowArrayBuilder<Array> ValueBuilder { get; }
+
+            private ArrowBuffer.Builder<int> ValueOffsetsBufferBuilder { get; }
+
+            private ListType DataType { get; }
+
+            public Builder(ListType dataType)
+            {
+                ValueBuilder = ArrowArrayBuilderFactory.BuildBuilder(dataType.ValueDataType) as IArrowArrayBuilder<Array>;
+                ValueOffsetsBufferBuilder = new ArrowBuffer.Builder<int>();
+                DataType = dataType;
+            }
+
+            public int GetLength()
+            {
+                return ValueOffsetsBufferBuilder.Length;
+            }
+
+            public Builder Append()
+            {
+                ValueOffsetsBufferBuilder.Append(ValueBuilder.GetLength());
+                return this;
+            }
+
+            public ListArray Build(MemoryAllocator allocator = default)
+            {
+                var valueLength = ValueBuilder.GetLength();
+                var valueOffsetLength = ValueOffsetsBufferBuilder.Length;
+                
+                if (valueOffsetLength == 0 || 
+                    ValueOffsetsBufferBuilder.Span[valueOffsetLength - 1] < valueLength)
+                {
+                    Append();
+                }
+                var valueList = ValueBuilder.Build(allocator);
+                return new ListArray(DataType, ValueOffsetsBufferBuilder.Length - 1,
+                    ValueOffsetsBufferBuilder.Build(allocator), valueList,
+                    new ArrowBuffer(), 0, 0);
+
+            }
+
+        }
+        
         public IArrowArray Values { get; }
 
         public ArrowBuffer ValueOffsetsBuffer => Data.Buffers[1];
 
-        public ReadOnlySpan<int> ValueOffsets => ValueOffsetsBuffer.Span.CastTo<int>().Slice(0, Length + 1);
+        public ReadOnlySpan<int> ValueOffsets => ValueOffsetsBuffer.Span.CastTo<int>().Slice(Offset, Length + 1);
 
         public ListArray(IArrowType dataType, int length,
             ArrowBuffer valueOffsetsBuffer, IArrowArray values,
@@ -32,14 +83,15 @@ namespace Apache.Arrow
             : this(new ArrayData(dataType, length, nullCount, offset,
                 new[] {nullBitmapBuffer, valueOffsetsBuffer}, new[] {values.Data}))
         {
-            Values = values;
         }
+
 
         public ListArray(ArrayData data)
             : base(data)
         {
             data.EnsureBufferCount(2);
             data.EnsureDataType(ArrowTypeId.List);
+            Values = ArrowArrayFactory.BuildArray(data.Children[0]);
         }
 
         public override void Accept(IArrowArrayVisitor visitor) => Accept(this, visitor);

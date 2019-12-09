@@ -77,6 +77,12 @@ namespace Apache.Arrow
                 return Build(data);
             }
 
+            public int GetLength()
+            {
+                return ValueBuffer.Length;
+            }
+
+
             public TBuilder Append(byte value)
             {
                 ValueOffsets.Append(Offset);
@@ -183,6 +189,14 @@ namespace Apache.Arrow
             return offsets[offset + 1] - offsets[offset];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetAllValueLength()
+        {
+            var offsets = ValueOffsets;
+
+            return offsets[Data.Length] - offsets[Offset];
+        }
+
         public ReadOnlySpan<byte> GetBytes(int index)
         {
             var offset = GetValueOffset(index);
@@ -191,5 +205,19 @@ namespace Apache.Arrow
             return ValueBuffer.Span.Slice(offset, length);
         }
 
+        public override Array Slice(int offset, int length)
+        {
+            var valueLength = GetAllValueLength();
+            if (offset > valueLength)
+            {
+                throw new ArgumentException($"Offset {offset} cannot be greater than Length {Length} for Array.Slice");
+            }
+
+            length = Math.Min(valueLength - offset, length);
+            offset += Data.Offset;
+
+            ArrayData newData = Data.Slice(offset, length);
+            return ArrowArrayFactory.BuildArray(newData) as Array;
+        }
     }
 }

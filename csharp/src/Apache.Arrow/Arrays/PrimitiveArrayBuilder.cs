@@ -33,6 +33,11 @@ namespace Apache.Arrow
             ArrayBuilder = builder ?? throw new ArgumentNullException(nameof(builder));
         }
 
+        public int GetLength()
+        {
+            return ArrayBuilder.GetLength();
+        }
+
         public TArray Build(MemoryAllocator allocator = default) => ArrayBuilder.Build(allocator);
 
         public TBuilder Append(TFrom value)
@@ -103,6 +108,11 @@ namespace Apache.Arrow
         internal PrimitiveArrayBuilder()
         {
             ValueBuffer = new ArrowBuffer.Builder<T>();
+        }
+
+        public int GetLength()
+        {
+            return ValueBuffer.Length;
         }
 
         public TBuilder Resize(int length)

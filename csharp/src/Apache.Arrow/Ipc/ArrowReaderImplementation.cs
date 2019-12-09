@@ -19,8 +19,10 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using Apache.Arrow.Types;
 
 namespace Apache.Arrow.Ipc
 {
@@ -122,8 +124,8 @@ namespace Apache.Arrow.Ipc
                 Flatbuf.FieldNode fieldNode = recordBatchMessage.Nodes(n).GetValueOrDefault();
 
                 ArrayData arrayData = field.DataType.IsFixedPrimitive() ?
-                    LoadPrimitiveField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex) :
-                    LoadVariableField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex);
+                    LoadPrimitiveField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref n, messageBuffer, recordBatchMessage) :
+                    LoadVariableField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref n, messageBuffer, recordBatchMessage);
 
                 arrays.Add(ArrowArrayFactory.BuildArray(arrayData));
             }
@@ -136,7 +138,10 @@ namespace Apache.Arrow.Ipc
             Flatbuf.FieldNode fieldNode,
             Flatbuf.RecordBatch recordBatch,
             ByteBuffer bodyData,
-            ref int bufferIndex)
+            ref int bufferIndex,
+            ref int nodeNumber,
+            ByteBuffer messageBuffer,
+            Flatbuf.RecordBatch recordBatchMessage)
         {
             var nullBitmapBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
             var valueBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
@@ -159,7 +164,21 @@ namespace Apache.Arrow.Ipc
 
             var arrowBuff = new[] { nullArrowBuffer, valueArrowBuffer };
 
-            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff);
+            var children = new List<ArrayData>();
+            if (field.DataType.TypeId == ArrowTypeId.List)
+            {
+                nodeNumber++;
+                var childField = ((ListType)field.DataType).ValueField;
+                Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+
+                ArrayData arrayData = childField.DataType.IsFixedPrimitive() ?
+                    LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage) :
+                    LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
+
+                children.Add(arrayData);
+            }
+
+            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray(): null);
         }
 
         private ArrayData LoadVariableField(
@@ -167,7 +186,10 @@ namespace Apache.Arrow.Ipc
             Flatbuf.FieldNode fieldNode,
             Flatbuf.RecordBatch recordBatch,
             ByteBuffer bodyData,
-            ref int bufferIndex)
+            ref int bufferIndex,
+            ref int nodeNumber,
+            ByteBuffer messageBuffer,
+            Flatbuf.RecordBatch recordBatchMessage)
         {
             var nullBitmapBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
             var offsetBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
@@ -192,7 +214,21 @@ namespace Apache.Arrow.Ipc
 
             var arrowBuff = new[] { nullArrowBuffer, offsetArrowBuffer, valueArrowBuffer };
 
-            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff);
+            var children = new List<ArrayData>();
+            if (field.DataType.TypeId == ArrowTypeId.List)
+            {
+                nodeNumber++;
+                var childField = ((ListType) field.DataType).ValueField;
+                Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+
+                ArrayData arrayData = childField.DataType.IsFixedPrimitive() ?
+                    LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage) :
+                    LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
+
+                children.Add(arrayData);
+            }
+
+            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray() : null);
         }
 
         private ArrowBuffer BuildArrowBuffer(ByteBuffer bodyData, Flatbuf.Buffer buffer)

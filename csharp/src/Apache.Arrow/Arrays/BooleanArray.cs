@@ -35,6 +35,11 @@ namespace Apache.Arrow
                 Length = 0;
             }
 
+            public int GetLength()
+            {
+                return ValueBuffer.Length;
+            }
+
             public Builder Append(bool value)
             {
                 if (Length % 8 == 0)

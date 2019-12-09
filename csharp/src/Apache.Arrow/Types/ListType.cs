@@ -23,6 +23,7 @@ namespace Apache.Arrow.Types
         public override string Name => "list";
 
         public Field ValueField { get; }
+
         public IArrowType ValueDataType { get; }
 
         public ListType(Field valueField)

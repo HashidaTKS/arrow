@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Apache.Arrow.Types;
 using FlatBuffers;
 
 namespace Apache.Arrow.Ipc
@@ -108,7 +109,7 @@ namespace Apache.Arrow.Ipc
             }
 
             private void CreateBuffers<T>(PrimitiveArray<T> array)
-                where T: struct
+                where T : struct
             {
                 _buffers.Add(CreateBuffer(array.NullBitmapBuffer));
                 _buffers.Add(CreateBuffer(array.ValueBuffer));
@@ -175,6 +176,15 @@ namespace Apache.Arrow.Ipc
             _options = options ?? IpcOptions.Default;
         }
 
+        private void CreateFieldNodes(IArrowArray fieldArray)
+        {
+            if (fieldArray.Data.DataType.TypeId == ArrowTypeId.List)
+            {
+                CreateFieldNodes(((ListArray)fieldArray).Values);
+            }
+            Flatbuf.FieldNode.CreateFieldNode(Builder, fieldArray.Length, fieldArray.NullCount);
+        }
+
         private protected async Task WriteRecordBatchInternalAsync(RecordBatch recordBatch,
             CancellationToken cancellationToken = default)
         {
@@ -197,8 +207,8 @@ namespace Apache.Arrow.Ipc
             // flatbuffer struct vectors have to be created in reverse order
             for (var i = fieldCount - 1; i >= 0; i--)
             {
-                var fieldArray = recordBatch.Column(i);
-                Flatbuf.FieldNode.CreateFieldNode(Builder, fieldArray.Length, fieldArray.NullCount);
+                IArrowArray fieldArray = recordBatch.Column(i);
+                CreateFieldNodes(fieldArray);
             }
 
             var fieldNodesVectorOffset = Builder.EndVector();
@@ -285,7 +295,7 @@ namespace Apache.Arrow.Ipc
         {
             return WriteRecordBatchInternalAsync(recordBatch, cancellationToken);
         }
-        
+
         public async Task WriteEndAsync(CancellationToken cancellationToken = default)
         {
             if (!HasWrittenEnd)
@@ -311,11 +321,16 @@ namespace Apache.Arrow.Ipc
 
             for (var i = 0; i < fieldOffsets.Length; i++)
             {
+                fieldChildren.Clear();
                 var field = schema.GetFieldByIndex(i);
-                var fieldNameOffset = Builder.CreateString(field.Name);
-                var fieldType = _fieldTypeBuilder.BuildFieldType(field);
+
+
+                fieldChildren = GetChildrenFieldOffset(field);
 
                 var fieldChildrenOffsets = Builder.CreateVectorOfTables(fieldChildren.ToArray());
+
+                var fieldNameOffset = Builder.CreateString(field.Name);
+                var fieldType = _fieldTypeBuilder.BuildFieldType(field);
 
                 fieldOffsets[i] = Flatbuf.Field.CreateField(Builder,
                     fieldNameOffset, field.IsNullable, fieldType.Type, fieldType.Offset,
@@ -330,6 +345,27 @@ namespace Apache.Arrow.Ipc
 
             return Flatbuf.Schema.CreateSchema(
                 Builder, endianness, fieldsVectorOffset);
+        }
+
+        private protected List<Offset<Flatbuf.Field>> GetChildrenFieldOffset(Field field)
+        {
+            if (field.DataType.TypeId == ArrowTypeId.List)
+            {
+                var type = field.DataType as ListType;
+                var childField = type?.ValueField;
+                var fieldNameOffset = Builder.CreateString(childField.Name);
+                var fieldType = _fieldTypeBuilder.BuildFieldType(childField);
+                var fieldChildrenOffsets = Builder.CreateVectorOfTables(new Offset<Flatbuf.Field>[] { });
+
+                return new List<Offset<Flatbuf.Field>>{
+                    Flatbuf.Field.CreateField(Builder,
+                    fieldNameOffset, field.IsNullable, fieldType.Type, fieldType.Offset,
+                    default, fieldChildrenOffsets, default)};
+            }
+            else
+            {
+                return new List<Offset<Flatbuf.Field>>();
+            }
         }
 
         private async ValueTask<Offset<Flatbuf.Schema>> WriteSchemaAsync(Schema schema, CancellationToken cancellationToken)
@@ -357,7 +393,7 @@ namespace Apache.Arrow.Ipc
         private async ValueTask<long> WriteMessageAsync<T>(
             Flatbuf.MessageHeader headerType, Offset<T> headerOffset, int bodyLength,
             CancellationToken cancellationToken)
-            where T: struct
+            where T : struct
         {
             var messageOffset = Flatbuf.Message.CreateMessage(
                 Builder, CurrentMetadataVersion, headerType, headerOffset.Value,

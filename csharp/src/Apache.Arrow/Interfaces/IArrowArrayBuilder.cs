@@ -19,7 +19,10 @@ using System.Collections.Generic;
 
 namespace Apache.Arrow
 {
-    public interface IArrowArrayBuilder { }
+    public interface IArrowArrayBuilder
+    {
+        int GetLength();
+    }
 
     public interface IArrowArrayBuilder<out TArray> : IArrowArrayBuilder
         where TArray: IArrowArray
@@ -29,6 +32,7 @@ namespace Apache.Arrow
 
     public interface IArrowArrayBuilder<T, out TArray> : IArrowArrayBuilder<TArray>
         where TArray: IArrowArray { }
+    
 
     public interface IArrowArrayBuilder<T, out TArray, out TBuilder> : IArrowArrayBuilder<T, TArray>
         where TArray : IArrowArray

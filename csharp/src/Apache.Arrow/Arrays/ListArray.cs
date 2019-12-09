@@ -56,13 +56,16 @@ namespace Apache.Arrow
             {
                 var valueLength = ValueBuilder.GetLength();
                 var valueOffsetLength = ValueOffsetsBufferBuilder.Length;
-                
+
                 if (valueOffsetLength == 0 || 
                     ValueOffsetsBufferBuilder.Span[valueOffsetLength - 1] < valueLength)
                 {
                     Append();
                 }
+
                 var valueList = ValueBuilder.Build(allocator);
+
+
                 return new ListArray(DataType, ValueOffsetsBufferBuilder.Length - 1,
                     ValueOffsetsBufferBuilder.Build(allocator), valueList,
                     new ArrowBuffer(), 0, 0);

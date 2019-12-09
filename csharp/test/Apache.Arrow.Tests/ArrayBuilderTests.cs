@@ -109,9 +109,10 @@ namespace Apache.Arrow.Tests
 
             var result = listBuilder.Build();
             var val = result.Values as StringArray;
-            var resultListVal3 = val.Slice(result.GetValueOffset(2), result.GetValueLength(2));
-            var resultListVal1 = val.Slice(result.GetValueOffset(0), result.GetValueLength(0));
-            var resultListVal2 = val.Slice(result.GetValueOffset(1), result.GetValueLength(1));
+            var resultListVal1 = val.Slice(result.GetValueOffset(0), result.GetValueLength(0)) as StringArray;
+            var resultListVal2 = val.Slice(result.GetValueOffset(1), result.GetValueLength(1)) as StringArray;
+            var resultListVal3 = val.Slice(result.GetValueOffset(2), result.GetValueLength(2)) as StringArray;
+
         }
 
         [Fact]

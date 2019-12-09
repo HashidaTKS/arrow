@@ -77,9 +77,13 @@ namespace Apache.Arrow
                 return Build(data);
             }
 
+            /// <summary>
+            /// Get number of value
+            /// </summary>
+            /// <returns></returns>
             public int GetLength()
             {
-                return ValueBuffer.Length;
+                return ValueOffsets.Length;
             }
 
 
@@ -170,31 +174,23 @@ namespace Apache.Arrow
 
         public ArrowBuffer ValueBuffer => Data.Buffers[2];
 
-        public ReadOnlySpan<int> ValueOffsets => ValueOffsetsBuffer.Span.CastTo<int>().Slice(0, Length + 1);
+        public ReadOnlySpan<int> ValueOffsets => ValueOffsetsBuffer.Span.CastTo<int>().Slice(Offset, Length + 1);
 
         public ReadOnlySpan<byte> Values => ValueBuffer.Span.CastTo<byte>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetValueOffset(int index)
         {
-            return ValueOffsets[Offset + index];
+            return ValueOffsets[index];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetValueLength(int index)
         {
             var offsets = ValueOffsets;
-            var offset = Offset + index;
+            var offset = index;
 
             return offsets[offset + 1] - offsets[offset];
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetAllValueLength()
-        {
-            var offsets = ValueOffsets;
-
-            return offsets[Data.Length] - offsets[Offset];
         }
 
         public ReadOnlySpan<byte> GetBytes(int index)
@@ -203,21 +199,6 @@ namespace Apache.Arrow
             var length = GetValueLength(index);
             
             return ValueBuffer.Span.Slice(offset, length);
-        }
-
-        public override Array Slice(int offset, int length)
-        {
-            var valueLength = GetAllValueLength();
-            if (offset > valueLength)
-            {
-                throw new ArgumentException($"Offset {offset} cannot be greater than Length {Length} for Array.Slice");
-            }
-
-            length = Math.Min(valueLength - offset, length);
-            offset += Data.Offset;
-
-            ArrayData newData = Data.Slice(offset, length);
-            return ArrowArrayFactory.BuildArray(newData) as Array;
         }
     }
 }

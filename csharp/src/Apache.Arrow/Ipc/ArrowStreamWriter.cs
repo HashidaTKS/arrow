@@ -18,6 +18,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Apache.Arrow.Types;
@@ -178,9 +179,12 @@ namespace Apache.Arrow.Ipc
 
         private void CreateFieldNodes(IArrowArray fieldArray)
         {
-            if (fieldArray.Data.DataType.TypeId == ArrowTypeId.List)
+            if (fieldArray.Data.DataType is NestedType)
             {
-                CreateFieldNodes(((ListArray)fieldArray).Values);
+                foreach (var child in fieldArray.Data.Children)
+                {
+                    CreateFieldNodes(ArrowArrayFactory.BuildArray(child));
+                }
             }
             Flatbuf.FieldNode.CreateFieldNode(Builder, fieldArray.Length, fieldArray.NullCount);
         }
@@ -317,16 +321,12 @@ namespace Apache.Arrow.Ipc
             // Build fields
 
             var fieldOffsets = new Offset<Flatbuf.Field>[schema.Fields.Count];
-            var fieldChildren = new List<Offset<Flatbuf.Field>>();
 
             for (var i = 0; i < fieldOffsets.Length; i++)
             {
-                fieldChildren.Clear();
                 var field = schema.GetFieldByIndex(i);
 
-
-                fieldChildren = GetChildrenFieldOffset(field);
-
+                var fieldChildren = GetChildrenFieldOffset(field).ToArray();
                 var fieldChildrenOffsets = Builder.CreateVectorOfTables(fieldChildren.ToArray());
 
                 var fieldNameOffset = Builder.CreateString(field.Name);
@@ -347,24 +347,22 @@ namespace Apache.Arrow.Ipc
                 Builder, endianness, fieldsVectorOffset);
         }
 
-        private protected List<Offset<Flatbuf.Field>> GetChildrenFieldOffset(Field field)
+        private protected IEnumerable<Offset<Flatbuf.Field>> GetChildrenFieldOffset(Field field)
         {
-            if (field.DataType.TypeId == ArrowTypeId.List)
+            if (!(field.DataType is NestedType type)) yield break;
+            foreach (var child in type.Children)
             {
-                var type = field.DataType as ListType;
-                var childField = type?.ValueField;
-                var fieldNameOffset = Builder.CreateString(childField.Name);
-                var fieldType = _fieldTypeBuilder.BuildFieldType(childField);
+                foreach (var grandChild in GetChildrenFieldOffset(child))
+                {
+                    yield return grandChild;
+                }
+                var fieldNameOffset = Builder.CreateString(child.Name);
+                var fieldType = _fieldTypeBuilder.BuildFieldType(child);
                 var fieldChildrenOffsets = Builder.CreateVectorOfTables(new Offset<Flatbuf.Field>[] { });
 
-                return new List<Offset<Flatbuf.Field>>{
-                    Flatbuf.Field.CreateField(Builder,
-                    fieldNameOffset, field.IsNullable, fieldType.Type, fieldType.Offset,
-                    default, fieldChildrenOffsets, default)};
-            }
-            else
-            {
-                return new List<Offset<Flatbuf.Field>>();
+                yield return Flatbuf.Field.CreateField(Builder,
+                    fieldNameOffset, child.IsNullable, fieldType.Type, fieldType.Offset,
+                    default, fieldChildrenOffsets, default);
             }
         }
 

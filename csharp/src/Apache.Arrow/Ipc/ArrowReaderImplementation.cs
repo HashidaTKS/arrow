@@ -164,18 +164,23 @@ namespace Apache.Arrow.Ipc
 
             var arrowBuff = new[] { nullArrowBuffer, valueArrowBuffer };
 
+            //todo : To Common Method
+
             var children = new List<ArrayData>();
-            if (field.DataType.TypeId == ArrowTypeId.List)
+            if (field.DataType is NestedType type)
             {
-                nodeNumber++;
-                var childField = ((ListType)field.DataType).ValueField;
-                Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+                foreach(var childField in type.Children){
+                    nodeNumber++;
 
-                ArrayData arrayData = childField.DataType.IsFixedPrimitive() ?
-                    LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage) :
-                    LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
+                    Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+                    var arrayData = childField.DataType.IsFixedPrimitive()
+                        ? LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer,
+                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage)
+                        : LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer,
+                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
 
-                children.Add(arrayData);
+                    children.Add(arrayData);
+                }
             }
 
             return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray(): null);
@@ -214,21 +219,26 @@ namespace Apache.Arrow.Ipc
 
             var arrowBuff = new[] { nullArrowBuffer, offsetArrowBuffer, valueArrowBuffer };
 
+            //todo : To Common Method
             var children = new List<ArrayData>();
-            if (field.DataType.TypeId == ArrowTypeId.List)
+            if (field.DataType is NestedType type)
             {
-                nodeNumber++;
-                var childField = ((ListType) field.DataType).ValueField;
-                Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+                foreach (var childField in type.Children)
+                {
+                    nodeNumber++;
+                    Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
+                    var arrayData = childField.DataType.IsFixedPrimitive()
+                        ? LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer,
+                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage)
+                        : LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer,
+                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
 
-                ArrayData arrayData = childField.DataType.IsFixedPrimitive() ?
-                    LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage) :
-                    LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
-
-                children.Add(arrayData);
+                    children.Add(arrayData);
+                }
             }
 
             return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray() : null);
+
         }
 
         private ArrowBuffer BuildArrowBuffer(ByteBuffer bodyData, Flatbuf.Buffer buffer)

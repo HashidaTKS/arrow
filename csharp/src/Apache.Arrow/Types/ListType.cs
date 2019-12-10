@@ -17,20 +17,17 @@ using System;
 
 namespace Apache.Arrow.Types
 {
-    public sealed class ListType : ArrowType
+    public sealed class ListType : NestedType
     {
         public override ArrowTypeId TypeId => ArrowTypeId.List;
         public override string Name => "list";
 
-        public Field ValueField { get; }
+        public Field ValueField => Child(0);
 
-        public IArrowType ValueDataType { get; }
+        public IArrowType ValueDataType => Child(0).DataType;
 
         public ListType(Field valueField)
-        {
-            ValueField = valueField ?? throw new ArgumentNullException(nameof(valueField));
-            ValueDataType = ValueField.DataType;
-        }
+           : base(valueField){ }
 
         public ListType(IArrowType valueDataType) 
             : this(new Field("item", valueDataType, true)) { }

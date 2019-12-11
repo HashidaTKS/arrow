@@ -57,6 +57,7 @@ namespace Apache.Arrow
                 case ArrowTypeId.Date32:
                     return new Date32Array.Builder();
                 case ArrowTypeId.List:
+                    return new ListArray.Builder(dataType as ListType);
                 case ArrowTypeId.Struct:
                 case ArrowTypeId.Union:
                 case ArrowTypeId.Decimal:

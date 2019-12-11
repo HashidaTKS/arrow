@@ -177,16 +177,47 @@ namespace Apache.Arrow.Ipc
             _options = options ?? IpcOptions.Default;
         }
 
-        private void CreateFieldNodes(IArrowArray fieldArray)
+        private VectorOffset CreateFieldVector(IEnumerable<IArrowArray> fieldArrayList)
         {
-            if (fieldArray.Data.DataType is NestedType)
+            var allArrowArrayList = GetAll(fieldArrayList).ToList();
+            
+            Flatbuf.RecordBatch.StartNodesVector(Builder, allArrowArrayList.Count);
+            foreach (var array in allArrowArrayList)
             {
-                foreach (var child in fieldArray.Data.Children)
+                Flatbuf.FieldNode.CreateFieldNode(Builder, array.Length, array.NullCount);
+            }
+
+            return Builder.EndVector();
+
+
+            //Inner methods
+
+            IEnumerable<IArrowArray> GetAll(IEnumerable<IArrowArray> targetArrayList)
+            {
+                foreach (var arrowArray in targetArrayList)
                 {
-                    CreateFieldNodes(ArrowArrayFactory.BuildArray(child));
+                    foreach (var arr in GetSelfAndOffspring(arrowArray))
+                    {
+                        yield return arr;
+                    }
                 }
             }
-            Flatbuf.FieldNode.CreateFieldNode(Builder, fieldArray.Length, fieldArray.NullCount);
+
+            IEnumerable<IArrowArray> GetSelfAndOffspring(IArrowArray targetArray)
+            {
+                if (targetArray.Data.DataType is NestedType)
+                {
+                    //todo: should be reverse order ?
+                    foreach (var child in targetArray.Data.Children)
+                    {
+                        foreach (var field in GetSelfAndOffspring(ArrowArrayFactory.BuildArray(child)))
+                        {
+                            yield return field;
+                        }
+                    }
+                }
+                yield return targetArray;
+            }
         }
 
         private protected async Task WriteRecordBatchInternalAsync(RecordBatch recordBatch,
@@ -203,23 +234,13 @@ namespace Apache.Arrow.Ipc
             Builder.Clear();
 
             // Serialize field nodes
-
-            var fieldCount = Schema.Fields.Count;
-
-            Flatbuf.RecordBatch.StartNodesVector(Builder, fieldCount);
-
             // flatbuffer struct vectors have to be created in reverse order
-            for (var i = fieldCount - 1; i >= 0; i--)
-            {
-                IArrowArray fieldArray = recordBatch.Column(i);
-                CreateFieldNodes(fieldArray);
-            }
-
-            var fieldNodesVectorOffset = Builder.EndVector();
+            var fieldNodesVectorOffset = CreateFieldVector(recordBatch.Arrays.Reverse());
 
             // Serialize buffers
-
             var recordBatchBuilder = new ArrowRecordBatchFlatBufferBuilder();
+
+            var fieldCount = Schema.Fields.Count;
             for (var i = 0; i < fieldCount; i++)
             {
                 var fieldArray = recordBatch.Column(i);
@@ -352,13 +373,9 @@ namespace Apache.Arrow.Ipc
             if (!(field.DataType is NestedType type)) yield break;
             foreach (var child in type.Children)
             {
-                foreach (var grandChild in GetChildrenFieldOffset(child))
-                {
-                    yield return grandChild;
-                }
                 var fieldNameOffset = Builder.CreateString(child.Name);
                 var fieldType = _fieldTypeBuilder.BuildFieldType(child);
-                var fieldChildrenOffsets = Builder.CreateVectorOfTables(new Offset<Flatbuf.Field>[] { });
+                var fieldChildrenOffsets = Builder.CreateVectorOfTables(GetChildrenFieldOffset(child).ToArray());
 
                 yield return Flatbuf.Field.CreateField(Builder,
                     fieldNameOffset, child.IsNullable, fieldType.Type, fieldType.Offset,

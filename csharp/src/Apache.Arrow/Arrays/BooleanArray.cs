@@ -35,7 +35,7 @@ namespace Apache.Arrow
                 Length = 0;
             }
 
-            public int GetLength()
+            public int GetValueCount()
             {
                 return ValueBuffer.Length;
             }

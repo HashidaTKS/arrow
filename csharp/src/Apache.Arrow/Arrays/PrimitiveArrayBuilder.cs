@@ -33,9 +33,9 @@ namespace Apache.Arrow
             ArrayBuilder = builder ?? throw new ArgumentNullException(nameof(builder));
         }
 
-        public int GetLength()
+        public int GetValueCount()
         {
-            return ArrayBuilder.GetLength();
+            return ArrayBuilder.GetValueCount();
         }
 
         public TArray Build(MemoryAllocator allocator = default) => ArrayBuilder.Build(allocator);
@@ -110,7 +110,7 @@ namespace Apache.Arrow
             ValueBuffer = new ArrowBuffer.Builder<T>();
         }
 
-        public int GetLength()
+        public int GetValueCount()
         {
             return ValueBuffer.Length;
         }

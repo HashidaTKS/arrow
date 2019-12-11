@@ -182,6 +182,7 @@ namespace Apache.Arrow.Ipc
             var allArrowArrayList = GetAll(fieldArrayList).ToList();
             
             Flatbuf.RecordBatch.StartNodesVector(Builder, allArrowArrayList.Count);
+
             foreach (var array in allArrowArrayList)
             {
                 Flatbuf.FieldNode.CreateFieldNode(Builder, array.Length, array.NullCount);
@@ -210,9 +211,9 @@ namespace Apache.Arrow.Ipc
                     //todo: should be reverse order ?
                     foreach (var child in targetArray.Data.Children)
                     {
-                        foreach (var field in GetSelfAndOffspring(ArrowArrayFactory.BuildArray(child)))
+                        foreach (var offspring in GetSelfAndOffspring(ArrowArrayFactory.BuildArray(child)))
                         {
-                            yield return field;
+                            yield return offspring;
                         }
                     }
                 }

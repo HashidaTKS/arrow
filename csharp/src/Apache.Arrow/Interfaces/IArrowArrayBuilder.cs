@@ -21,7 +21,7 @@ namespace Apache.Arrow
 {
     public interface IArrowArrayBuilder
     {
-        int GetLength();
+        int GetValueCount();
     }
 
     public interface IArrowArrayBuilder<out TArray> : IArrowArrayBuilder

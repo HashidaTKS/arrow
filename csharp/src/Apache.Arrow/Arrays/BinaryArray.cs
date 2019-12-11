@@ -77,15 +77,11 @@ namespace Apache.Arrow
                 return Build(data);
             }
 
-            /// <summary>
-            /// Get number of value
-            /// </summary>
-            /// <returns></returns>
-            public int GetLength()
+            public int GetValueCount()
             {
                 return ValueOffsets.Length;
             }
-
+            
 
             public TBuilder Append(byte value)
             {

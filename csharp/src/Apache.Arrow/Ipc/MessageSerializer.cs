@@ -128,7 +128,7 @@ namespace Apache.Arrow.Ipc
                 case Flatbuf.Type.List:
                     if (field.ChildrenLength != 1)
                     {
-                        throw new InvalidDataException($"Arrow List type must have only one child.");
+                        throw new InvalidDataException($"List type must have only one child.");
                     }
                     return new Types.ListType(GetFieldArrowType(field.Children(0).GetValueOrDefault()));
                 default:

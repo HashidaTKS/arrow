@@ -28,7 +28,7 @@ namespace Apache.Arrow
         {
             //todo: support null bitmap
 
-            public IArrowArrayBuilder<Array> ValueBuilder { get; }
+            public IArrowArrayBuilder<IArrowArray> ValueBuilder { get; }
 
             private ArrowBuffer.Builder<int> ValueOffsetsBufferBuilder { get; }
 
@@ -36,25 +36,25 @@ namespace Apache.Arrow
 
             public Builder(ListType dataType)
             {
-                ValueBuilder = ArrowArrayBuilderFactory.BuildBuilder(dataType.ValueDataType) as IArrowArrayBuilder<Array>;
+                ValueBuilder = ArrowArrayBuilderFactory.BuildBuilder(dataType.ValueDataType) as IArrowArrayBuilder<IArrowArray>;
                 ValueOffsetsBufferBuilder = new ArrowBuffer.Builder<int>();
                 DataType = dataType;
             }
 
-            public int GetLength()
+            public int GetValueCount()
             {
                 return ValueOffsetsBufferBuilder.Length;
             }
 
             public Builder Append()
             {
-                ValueOffsetsBufferBuilder.Append(ValueBuilder.GetLength());
+                ValueOffsetsBufferBuilder.Append(ValueBuilder.GetValueCount());
                 return this;
             }
 
             public ListArray Build(MemoryAllocator allocator = default)
             {
-                var valueLength = ValueBuilder.GetLength();
+                var valueLength = ValueBuilder.GetValueCount();
                 var valueOffsetLength = ValueOffsetsBufferBuilder.Length;
 
                 if (valueOffsetLength == 0 || 

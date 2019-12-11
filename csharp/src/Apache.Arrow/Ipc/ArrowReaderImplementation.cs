@@ -19,6 +19,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
@@ -115,36 +116,36 @@ namespace Apache.Arrow.Ipc
             ByteBuffer messageBuffer,
             Flatbuf.RecordBatch recordBatchMessage)
         {
-            var arrays = new List<IArrowArray>(recordBatchMessage.NodesLength);
-            int bufferIndex = 0;
+            return CreateInner(schema, recordBatchMessage, messageBuffer).ToList();
+        }
 
-            for (var n = 0; n < recordBatchMessage.NodesLength; n++)
+        private IEnumerable<IArrowArray> CreateInner(
+            Schema schema,
+            Flatbuf.RecordBatch recordBatch,
+            ByteBuffer bodyData)
+        {
+            var recordBatchManipulator = new RecordBatchManipulator(ref recordBatch);
+            while (!recordBatchManipulator.IsAllNodeRead)
             {
-                Field field = schema.GetFieldByIndex(n);
-                Flatbuf.FieldNode fieldNode = recordBatchMessage.Nodes(n).GetValueOrDefault();
+                var field = schema.GetFieldByIndex(recordBatchManipulator.CurrentNodeIndex);
+                Flatbuf.FieldNode fieldNode = recordBatchManipulator.UnshiftNode();
 
-                ArrayData arrayData = field.DataType.IsFixedPrimitive() ?
-                    LoadPrimitiveField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref n, messageBuffer, recordBatchMessage) :
-                    LoadVariableField(field, fieldNode, recordBatchMessage, messageBuffer, ref bufferIndex, ref n, messageBuffer, recordBatchMessage);
+                var arrayData = field.DataType.IsFixedPrimitive() ?
+                    LoadPrimitiveField(recordBatchManipulator, field, ref fieldNode, bodyData):
+                    LoadVariableField(recordBatchManipulator, field, ref fieldNode, bodyData);
 
-                arrays.Add(ArrowArrayFactory.BuildArray(arrayData));
+                yield return ArrowArrayFactory.BuildArray(arrayData);
             }
-
-            return arrays;
         }
 
         private ArrayData LoadPrimitiveField(
+            RecordBatchManipulator recordBatchManipulator,
             Field field,
-            Flatbuf.FieldNode fieldNode,
-            Flatbuf.RecordBatch recordBatch,
-            ByteBuffer bodyData,
-            ref int bufferIndex,
-            ref int nodeNumber,
-            ByteBuffer messageBuffer,
-            Flatbuf.RecordBatch recordBatchMessage)
+            ref Flatbuf.FieldNode fieldNode,
+            ByteBuffer bodyData)
         {
-            var nullBitmapBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
-            var valueBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
+            var nullBitmapBuffer = recordBatchManipulator.UnshiftBuffer();
+            var valueBuffer = recordBatchManipulator.UnshiftBuffer();
 
             ArrowBuffer nullArrowBuffer = BuildArrowBuffer(bodyData, nullBitmapBuffer);
             ArrowBuffer valueArrowBuffer = BuildArrowBuffer(bodyData, valueBuffer);
@@ -163,42 +164,21 @@ namespace Apache.Arrow.Ipc
             }
 
             var arrowBuff = new[] { nullArrowBuffer, valueArrowBuffer };
+            var offspring = GetOffspring(recordBatchManipulator, field, bodyData);
 
-            //todo : To Common Method
-
-            var children = new List<ArrayData>();
-            if (field.DataType is NestedType type)
-            {
-                foreach(var childField in type.Children){
-                    nodeNumber++;
-
-                    Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
-                    var arrayData = childField.DataType.IsFixedPrimitive()
-                        ? LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer,
-                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage)
-                        : LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer,
-                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
-
-                    children.Add(arrayData);
-                }
-            }
-
-            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray(): null);
+            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, offspring.ToArray());
         }
 
+
         private ArrayData LoadVariableField(
+            RecordBatchManipulator recordBatchManipulator,
             Field field,
-            Flatbuf.FieldNode fieldNode,
-            Flatbuf.RecordBatch recordBatch,
-            ByteBuffer bodyData,
-            ref int bufferIndex,
-            ref int nodeNumber,
-            ByteBuffer messageBuffer,
-            Flatbuf.RecordBatch recordBatchMessage)
+            ref Flatbuf.FieldNode fieldNode,
+            ByteBuffer bodyData)
         {
-            var nullBitmapBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
-            var offsetBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
-            var valueBuffer = recordBatch.Buffers(bufferIndex++).GetValueOrDefault();
+            var nullBitmapBuffer = recordBatchManipulator.UnshiftBuffer();
+            var offsetBuffer = recordBatchManipulator.UnshiftBuffer();
+            var valueBuffer = recordBatchManipulator.UnshiftBuffer();
 
             ArrowBuffer nullArrowBuffer = BuildArrowBuffer(bodyData, nullBitmapBuffer);
             ArrowBuffer offsetArrowBuffer = BuildArrowBuffer(bodyData, offsetBuffer);
@@ -218,27 +198,24 @@ namespace Apache.Arrow.Ipc
             }
 
             var arrowBuff = new[] { nullArrowBuffer, offsetArrowBuffer, valueArrowBuffer };
+            var offspring = GetOffspring(recordBatchManipulator, field, bodyData);
 
-            //todo : To Common Method
-            var children = new List<ArrayData>();
-            if (field.DataType is NestedType type)
+            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, offspring.ToArray());
+        }
+
+        IEnumerable<ArrayData> GetOffspring(
+            RecordBatchManipulator recordBatchManipulator,
+            Field field,
+            ByteBuffer bodyData)
+        {
+            if (!(field.DataType is NestedType type)) yield break;
+            foreach (var childField in type.Children)
             {
-                foreach (var childField in type.Children)
-                {
-                    nodeNumber++;
-                    Flatbuf.FieldNode childFieldNode = recordBatchMessage.Nodes(nodeNumber).GetValueOrDefault();
-                    var arrayData = childField.DataType.IsFixedPrimitive()
-                        ? LoadPrimitiveField(childField, childFieldNode, recordBatchMessage, messageBuffer,
-                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage)
-                        : LoadVariableField(childField, childFieldNode, recordBatchMessage, messageBuffer,
-                            ref bufferIndex, ref nodeNumber, messageBuffer, recordBatchMessage);
-
-                    children.Add(arrayData);
-                }
+                Flatbuf.FieldNode childFieldNode = recordBatchManipulator.UnshiftNode();
+                yield return childField.DataType.IsFixedPrimitive()
+                    ? LoadPrimitiveField(recordBatchManipulator, childField, ref childFieldNode, bodyData)
+                    : LoadVariableField(recordBatchManipulator, childField, ref childFieldNode, bodyData);
             }
-
-            return new ArrayData(field.DataType, fieldLength, fieldNullCount, 0, arrowBuff, children.Count > 0 ? children.ToArray() : null);
-
         }
 
         private ArrowBuffer BuildArrowBuffer(ByteBuffer bodyData, Flatbuf.Buffer buffer)
@@ -254,5 +231,29 @@ namespace Apache.Arrow.Ipc
             var data = bodyData.ToReadOnlyMemory(offset, length);
             return new ArrowBuffer(data);
         }
+    }
+
+    internal class RecordBatchManipulator
+    {
+        private int CurrentBufferIndex { get; set; }
+        private Flatbuf.RecordBatch RecordBatch { get; }
+        internal int CurrentNodeIndex { get; set; }
+        internal bool IsAllNodeRead => CurrentNodeIndex >= RecordBatch.NodesLength;
+
+        internal RecordBatchManipulator(ref Flatbuf.RecordBatch recordBatch)
+        {
+            RecordBatch = recordBatch;
+        }
+
+        internal Flatbuf.Buffer UnshiftBuffer()
+        {
+            return RecordBatch.Buffers(CurrentBufferIndex++).GetValueOrDefault();
+        }
+
+        internal Flatbuf.FieldNode UnshiftNode()
+        {
+            return RecordBatch.Nodes(CurrentNodeIndex++).GetValueOrDefault();
+        }
+
     }
 }

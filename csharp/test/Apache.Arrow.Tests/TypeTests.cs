@@ -100,11 +100,11 @@ namespace Apache.Arrow.Tests
         public void TestListTypeConstructor()
         {
             var stringField = new Field.Builder().Name("item").DataType(StringType.Default).Build();
-            var stringType1 = new ListType(stringField);
-            var stringType2 = new ListType(StringType.Default);
+            var stringListType1 = new ListType(stringField);
+            var stringListType2 = new ListType(StringType.Default);
 
-            Assert.True(FieldComparer.Equals(stringType1.ValueField, stringType2.ValueField));
-            Assert.Equal(stringType1.ValueDataType.TypeId, stringType2.ValueDataType.TypeId);
+            Assert.True(FieldComparer.Equals(stringListType1.ValueField, stringListType2.ValueField));
+            Assert.Equal(stringListType1.ValueDataType.TypeId, stringListType2.ValueDataType.TypeId);
         }
 
         // Todo: StructType::GetFieldIndexDuplicate test

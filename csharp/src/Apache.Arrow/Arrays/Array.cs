@@ -60,7 +60,7 @@ namespace Apache.Arrow
             }
         }
 
-        public virtual Array Slice(int offset, int length)
+        public Array Slice(int offset, int length)
         {
             if (offset > Length)
             {

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 using System;
-using Apache.Arrow.Flatbuf;
 using Apache.Arrow.Memory;
 using Apache.Arrow.Types;
 
@@ -87,7 +86,6 @@ namespace Apache.Arrow
                 new[] {nullBitmapBuffer, valueOffsetsBuffer}, new[] {values.Data}))
         {
         }
-
 
         public ListArray(ArrayData data)
             : base(data)

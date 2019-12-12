@@ -208,7 +208,6 @@ namespace Apache.Arrow.Ipc
             {
                 if (targetArray.Data.DataType is NestedType)
                 {
-                    //todo: should be reverse order ?
                     foreach (var child in targetArray.Data.Children)
                     {
                         foreach (var offspring in GetSelfAndOffspring(ArrowArrayFactory.BuildArray(child)))
@@ -347,12 +346,11 @@ namespace Apache.Arrow.Ipc
             for (var i = 0; i < fieldOffsets.Length; i++)
             {
                 var field = schema.GetFieldByIndex(i);
+                var fieldNameOffset = Builder.CreateString(field.Name);
+                var fieldType = _fieldTypeBuilder.BuildFieldType(field);
 
                 var fieldChildren = GetChildrenFieldOffset(field).ToArray();
                 var fieldChildrenOffsets = Builder.CreateVectorOfTables(fieldChildren.ToArray());
-
-                var fieldNameOffset = Builder.CreateString(field.Name);
-                var fieldType = _fieldTypeBuilder.BuildFieldType(field);
 
                 fieldOffsets[i] = Flatbuf.Field.CreateField(Builder,
                     fieldNameOffset, field.IsNullable, fieldType.Type, fieldType.Offset,

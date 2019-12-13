@@ -141,6 +141,8 @@ namespace Apache.Arrow.Tests
                 Assert.Equal(expectedArray.Offset, actualArray.Offset);
 
                 Assert.True(expectedArray.NullBitmapBuffer.Span.SequenceEqual(actualArray.NullBitmapBuffer.Span));
+                Assert.True(expectedArray.ValueOffsetsBuffer.Span.SequenceEqual(actualArray.ValueOffsetsBuffer.Span));
+
                 actualArray.Values.Accept(new ArrayComparer(expectedArray.Values));
             }
         }

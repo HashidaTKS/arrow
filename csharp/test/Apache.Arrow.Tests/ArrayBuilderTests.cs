@@ -41,7 +41,7 @@ namespace Apache.Arrow.Tests
         
 
         [Fact]
-        public void ListArrayBuilderTest()
+        public void ListArrayBuilder()
         {
             var list = CreateList();
             var values = (Int64Array)list.Values;
@@ -65,21 +65,16 @@ namespace Apache.Arrow.Tests
                 listBuilder.Append();
                 valueBuilder.Append(1);
                 listBuilder.Append();
-                valueBuilder.Append(2);
-                valueBuilder.Append(3);
-                valueBuilder.Append(4);
+                valueBuilder.Append(2).Append(3).Append(4);
                 listBuilder.Append();
-                valueBuilder.Append(21);
-                valueBuilder.Append(22);
-                valueBuilder.Append(23);
-                valueBuilder.Append(24);
+                valueBuilder.Append(21).Append(22).Append(23).Append(24);
 
                 return listBuilder.Build();
             }
         }
         
         [Fact]
-        public void NestedListArrayBuilderTest()
+        public void NestedListArrayBuilder()
         {
             var parentList = CreateList();
             var childLists = (ListArray)parentList.Values;
@@ -120,23 +115,13 @@ namespace Apache.Arrow.Tests
                 childListBuilder.Append();
                 valueBuilder.Append(1);
                 childListBuilder.Append();
-                valueBuilder.Append(2);
-                valueBuilder.Append(3);
-                valueBuilder.Append(4);
+                valueBuilder.Append(2).Append(3).Append(4);
                 parentListBuilder.Append();
                 childListBuilder.Append();
-                valueBuilder.Append(5);
-                valueBuilder.Append(6);
-                valueBuilder.Append(7);
-                valueBuilder.Append(8);
+                valueBuilder.Append(5).Append(6).Append(7).Append(8);
                 parentListBuilder.Append();
                 childListBuilder.Append();
-                valueBuilder.Append(9);
-                valueBuilder.Append(10);
-                valueBuilder.Append(11);
-                valueBuilder.Append(12);
-                valueBuilder.Append(13);
-                valueBuilder.Append(14);
+                valueBuilder.Append(9).Append(10).Append(11).Append(12).Append(13).Append(14);
                 childListBuilder.Build();
 
                 return parentListBuilder.Build();
